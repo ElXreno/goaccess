@@ -1,18 +1,46 @@
+%bcond_without lto
+
+%bcond_without tcb_memhash
+%bcond_with tcb_btree
+
+%bcond_without openssl
+
+%if %{with lto}
+%global optflags        %{optflags} -flto
+%global build_ldflags   %{build_ldflags} -flto
+%endif
+
 Name:           goaccess
-Version:        1.2
-Release:        8%{?dist}
+Version:        1.3
+Release:        1%{?dist}
 Summary:        Real-time web log analyzer and interactive viewer
+
 License:        GPLv2+
 URL:            https://goaccess.io/
-Source0:        http://tar.goaccess.io/%{name}-%{version}.tar.gz
+Source0:        https://github.com/allinurl/%{name}/archive/v%{version}/%{name}-%{version}.tar.gz
+
+# Fix build with GCC 10
+# https://github.com/allinurl/goaccess/pull/1701
+Patch1:         https://patch-diff.githubusercontent.com/raw/allinurl/goaccess/pull/1701.diff
+
 BuildRequires:  autoconf
 BuildRequires:  automake
 BuildRequires:  gcc
-BuildRequires:  GeoIP-devel
-BuildRequires:  ncurses-devel
-BuildRequires:  tokyocabinet-devel
-BuildRequires:  zlib-devel
-BuildRequires:  bzip2-devel
+
+# Fix warning: Could not complete Guile gdb module initialization from:
+# /usr/share/gdb/guile/gdb/boot.scm
+BuildRequires:  gdb-headless
+
+BuildRequires:  gettext-devel
+BuildRequires:  pkgconfig(bzip2)
+BuildRequires:  pkgconfig(geoip)
+BuildRequires:  pkgconfig(ncurses)
+%if %{with openssl}
+BuildRequires:  pkgconfig(openssl)
+%endif
+BuildRequires:  pkgconfig(tokyocabinet)
+BuildRequires:  pkgconfig(zlib)
+
 
 %description
 GoAccess is a real-time web log analyzer and interactive viewer that runs in a
@@ -53,28 +81,44 @@ not limited to:
 * Google Cloud Storage.
 * W3C format (IIS).
 
+
 %prep
-%setup -q
+%autosetup -p1
 # Prevent flags being overridden again and again.
 #sed -i 's|-pthread|$CFLAGS \0|' configure.ac
-sed -i '/-pthread/d' configure.ac
+sed -i '/ -pthread/d' configure.ac
+
 
 %build
 autoreconf -fiv
-%configure --enable-debug --enable-geoip --enable-utf8 --enable-tcb=btree --with-getline
+%configure \
+    --enable-debug \
+    --enable-geoip=legacy \
+    %{?with_tcb_memhash: --enable-tcb=memhash} \
+    %{?with_tcb_btree: --enable-tcb=btree} \
+    --enable-utf8 \
+    --with-getline \
+    %{?with_openssl: --with-openssl}
 %make_build
+
 
 %install
 %make_install
+%find_lang %{name}
 
-%files
+
+
+%files -f %{name}.lang
+%doc README NEWS ChangeLog AUTHORS
 %license COPYING
-%config(noreplace) %{_sysconfdir}/%{name}.conf
 %{_bindir}/%{name}
+%config(noreplace) %{_sysconfdir}/%{name}/*
 %{_mandir}/man1/%{name}.1*
-%{_pkgdocdir}
 
 %changelog
+* Thu Mar 12 2020 ElXreno <elxreno@gmail.com> - 1.3-1
+- Update to 1.3, spec improvements
+
 * Tue Jan 28 2020 Fedora Release Engineering <releng@fedoraproject.org> - 1.2-8
 - Rebuilt for https://fedoraproject.org/wiki/Fedora_32_Mass_Rebuild
 
